@@ -1,6 +1,7 @@
 [org 0x0100]
 jmp start
 
+oldisr: dd 0
 sco: db "Score:",0
 time: db "Time:",0
 wel: db "Welcome To",0
@@ -595,6 +596,7 @@ line1:
 	push ax
 	push di
 	push cx
+	push dx
 	
 	mov di,[bp+4]
 	mov ax,0xB800
@@ -670,7 +672,8 @@ skip:	mov di,ax
 							
 		add di,2             
 		mov word[es:di],0x02B1
-	
+		
+	pop dx
 	pop cx
 	pop di
 	pop ax
@@ -687,6 +690,7 @@ line2:
 	push ax
 	push di
 	push cx
+	push dx
 	
 	mov di,[bp+4]
 	mov ax,0xB800
@@ -761,6 +765,7 @@ line2:
 	add di,82
 	mov word [es:di],0x06DB
 	
+	pop dx
 	pop cx
 	pop di
 	pop ax
@@ -897,6 +902,7 @@ print_str:
 		push di
 		push bx
 		push cx
+		push dx
 		
 		mov ax,0xB800
 		mov es,ax
@@ -919,6 +925,16 @@ loop_str:		mov cl,[bx]
 				add di,2
 				add bx,1
 				jmp loop_str
+				
+ret_4:	pop dx
+		pop cx	
+		pop bx
+		pop di
+		pop ax
+		pop es
+		pop bp
+		
+		ret 8
 		
 	
 	
@@ -967,19 +983,10 @@ print_digits:		pop dx
 		pop bp
 		
 		ret 8
-	
-ret_4:	pop cx	
-		pop bx
-		pop di
-		pop ax
-		pop es
-		pop bp
-		
-		ret 8
 
 	
 	
-	car
+car:
 	push bp
 	mov bp,sp
 	push ax
@@ -1070,6 +1077,7 @@ car_2
 	push cx
 	push di
 	push es
+	push dx
 	
 	mov ax,0xB800
 	mov es,ax
@@ -1122,6 +1130,7 @@ loop_car_2:	mov word [es:di],0x04DB
 			
 	mov word[es:di],0x7411
 	
+	pop dx
 	pop es
 	pop di
 	pop cx
@@ -1179,6 +1188,90 @@ loop_ob_2:	mov word[es:di],0x01DB
 	
 	ret 2
 	
+draw_hurdle:
+		push bp
+		mov bp,sp
+		
+		push di
+		push es
+		push cx
+		
+		push 0xB800
+		pop es
+		
+		mov di,[bp+4]
+		
+		mov cx,3
+	loop_h_1:
+		mov word [es:di],0x00DB
+		add di,2
+	loop loop_h_1	
+	
+		add di,154
+		mov cx,3
+	loop_h_2:
+		mov word [es:di],0x00DB
+		add di,2
+	loop loop_h_2
+	
+		pop cx
+		pop es
+		pop di
+		pop bp
+		
+	ret 2
+	
+draw_bonus:
+	push bp
+	mov bp,sp
+	
+	push ax
+	push es
+	push di
+	
+	push 0xB800
+	pop es
+	mov di,[bp+4]
+	
+	mov ax,3
+	sub di,2
+	mov word[es:di],0x7E10
+	add di,2
+	
+	loop_b_1:	
+			mov word[es:di],0x0EDB
+			add di,2
+			dec ax
+			cmp ax,0
+			jnz loop_b_1
+					
+	mov word[es:di],0x7E11
+	
+	sub di,6
+	add di,160
+	
+	mov ax,3
+	
+	sub di,2
+	mov word[es:di],0x7E10
+	add di,2
+	
+	loop_b_2:	
+			mov word[es:di],0x0EDB
+			add di,2
+			dec ax
+			cmp ax,0
+			jnz loop_b_2
+			
+	mov word[es:di],0x7E11
+	
+	pop di
+	pop es
+	pop ax
+	pop bp
+	
+	ret 2
+	
 obstacle:
 	push bp
 	mov bp,sp
@@ -1195,9 +1288,9 @@ obstacle:
 	div bx
 	
 	cmp dx,0
-	jne cont
+	jne cont_o_1
 	
-	mov [seed],cx
+	;mov [seed],cx
 	push 0
 	push word 25
 	call random_num
@@ -1208,8 +1301,53 @@ obstacle:
 	
 	push ax
 	call draw_obstacle
+	jmp cont_o
 	
-cont:	pop bx
+	cont_o_1:
+	mov ax,cx
+	mov dx,0
+	mov bx,13
+	div bx
+	
+	cmp dx,0
+	jne cont_o_2
+	
+	;mov [seed],cx
+	push 0
+	push word 25
+	call random_num
+	
+	pop ax
+	add ax,ax
+	add ax,44
+	
+	push ax
+	call draw_hurdle
+	jmp cont_o
+	
+	cont_o_2:
+	mov ax,cx
+	mov dx,0
+	mov bx,29
+	div bx
+	
+	cmp dx,0
+	jne cont_o
+	
+	;mov [seed],cx
+	push 0
+	push word 25
+	call random_num
+	
+	pop ax
+	add ax,ax
+	add ax,44
+	
+	push ax
+	call draw_bonus
+	jmp cont_o	
+	
+cont_o:	pop bx
 		pop dx
 		pop ax
 		pop cx
@@ -1360,7 +1498,194 @@ instructions:
 		
 		ret
 		
+new_int:
 
+		;left 4B
+		;right 4D
+	
+		push ax
+		push es 
+	
+		in al,0x60
+		cmp al,0x4B
+		jne cmp_next
+		cmp dx,44
+		jbe con_int
+		sub dx,2
+		jmp con_int
+		
+		cmp_next:
+		cmp al,0x4D
+		jne con_int
+		cmp dx,94
+		jge con_int
+		add dx,2
+		jmp con_int
+		
+		con_int:
+		
+		pop es
+		pop ax
+		
+		jmp far[cs:oldisr]	
+		
+hook_int:
+		
+		push ax
+		push es
+		
+		mov ax,0
+		xor ax,ax
+		mov es,ax
+		mov ax,[es:9*4]
+		mov [oldisr],ax
+		mov ax,[es:9*4+2]
+		mov [oldisr+2],ax
+		cli
+		mov word [es:9*4],new_int
+		mov [es:9*4+2],cs
+		sti
+	
+		pop es
+		pop ax
+		
+		ret
+
+unhook_int:
+
+		push ax
+		push bx
+		push es
+		
+		mov ax,0
+		mov es,ax
+		mov ax,[oldisr]
+		mov bx,[oldisr+2]
+		cli
+		mov [es:9*4],ax
+		mov [es:9*4+2],bx
+		sti
+		
+		pop es
+		pop bx
+		pop ax
+		
+		ret 
+		
+collision:
+		push bp
+		mov bp,sp
+
+		push es
+		push ax
+		push dx
+		push cx
+		push di
+		push bx
+		
+		mov ax,21
+		mov cx,160
+		mul cx
+		
+		mov di,ax
+		mov cx,480
+		
+		push 0xB800
+		pop es
+		
+		loop_c_1:
+			mov word bx,[es:di]
+			cmp bx,0x7110
+			je cmp_col
+			add di,2
+		loop loop_c_1
+		mov word [bp+6],0
+		jmp con_c
+		
+
+		cmp_col:
+			mov ax,[bp+4]
+			add ax,3360
+			
+			cmp di,ax
+			jge cmp_col_1
+			mov word [bp+6],0
+			jmp con_c
+		cmp_col_1:
+			add di,4
+			cmp di,ax
+			jbe col_dec
+			mov word [bp+6],0
+			jmp con_c
+		col_dec:
+			mov word [bp+6],1
+			jmp con_c
+		
+	con_c:	
+		pop bx
+		pop di
+		pop cx
+		pop dx
+		pop ax
+		pop es
+		pop bp
+		
+		ret 2
+		
+collision_detection:
+		push bp
+		mov bp,sp
+		
+		push di
+		push es
+		push ax
+		push cx
+		
+		push 0xB800
+		pop es
+		
+		mov di,3360
+		add di,[bp+4]
+		
+		mov cx,3
+	loop_1_c:
+			mov ax,[es:di]
+			cmp ah,0x71
+			je ene
+			add di,2
+		loop loop_1_c
+
+		add di,152
+		mov cx,5
+	loop_2_c:
+			mov ax,[es:di]
+			cmp ah,0x71
+			je ene
+			add di,2
+		loop loop_2_c	
+		
+		add di,150
+		mov cx,5
+	loop_3_c:
+			mov ax,[es:di]
+			cmp ah,0x71
+			je ene
+			add di,2
+		loop loop_3_c
+		jmp con_cd
+		
+		ene:
+			mov word [bp+6],1
+			
+		con_cd:
+		pop cx
+		pop ax
+		pop es
+		pop di
+		pop bp
+		
+		ret 2
+	
 start:
 	call clrscr
 	call start_screen
@@ -1434,6 +1759,8 @@ loop_m_2:	mov ax,0
 	
 	con_m_3:
 	
+	
+	
 	call clrscr
 	call print_level
 	push 70
@@ -1441,6 +1768,9 @@ loop_m_2:	mov ax,0
 	call car_2
 	mov ax,0
 	mov cx,0
+	mov dx,70
+	
+	call hook_int
 	
 		push word sco; string input
 		push word 0x0F; color attribute
@@ -1466,14 +1796,60 @@ loop_m_2:	mov ax,0
 		push 10
 		call print_number
 		
+;		push 0xB800
+;		pop es
+;		
+;		mov di,3360
+;		add di,70
+;		
+;		mov cx,3
+;	loop_1_m:
+;			mov word [es:di],0x00DB
+;			add di,2
+;		loop loop_1_m
+;
+;		add di,152
+;		mov cx,5
+;	loop_2_m:
+;			mov word [es:di],0x00DB
+;			add di,2
+;		loop loop_2_m	
+;		
+;		
+;		add di,150
+;		mov cx,5
+;	loop_3_m:
+;			mov word [es:di],0x00DB
+;			add di,2
+;		loop loop_3_m
+			
+		
 loop_screen_1:
-
-				push 70; function parameter
+				;cli
+				push 0
+				push dx
+				call collision_detection
+				pop si
+				
+				
+				push dx; function parameter
 				push 21; function parameter
 				call car_2;function call
 				
+				cmp si,1
+				je ter_m_1
+				;sti
+				
 				push 5; function parameter
 				call delay;function call
+				
+				push 0
+				push dx
+				call collision
+				pop si
+				
+				cmp si,1
+				je ter_m_1
 				
 				call shift_line;function call
 				
@@ -1498,8 +1874,11 @@ loop_screen_1:
 				push ax; function parameter
 				call add_line_top;function call
 				
+				cmp cx,184
+				jg con_m_5
 				push cx
 				call obstacle
+				con_m_5:
 				
 				add ax,1
 				cmp ax,4
@@ -1507,10 +1886,16 @@ loop_screen_1:
 				mov ax,0
 				
 		con:	add cx,1
-				cmp cx,10
+				cmp cx,200
 
 			jbe loop_screen_1
 	call print_level
-ter_m:	
+	
+ter_m_1:
+	push 20
+	call delay
+	call unhook_int
+	jmp start
+ter_m:
 mov ax,0x4c00
 int 21h
